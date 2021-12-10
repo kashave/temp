@@ -1,0 +1,142 @@
+using System;
+
+/// <summary>
+/// Summary description for Class1
+/// </summary>
+public class Class1
+{
+    public Class1()
+    {
+        //
+        // TODO: Add constructor logic here
+        //
+
+        
+    }
+
+    public Folder GetContactsFolder(string userName)
+    {
+        #region Local Variables
+
+        if (exService == null)
+            ConnectExchange(userName);
+
+        TrustCertificate();
+        FolderView fv = new FolderView(int.MaxValue);
+        fv.Traversal = FolderTraversal.Deep;
+        fv.PropertySet = new PropertySet(BasePropertySet.FirstClassProperties);
+        fv.PropertySet.Add(FolderSchema.DisplayName);
+        fv.PropertySet.Add(FolderSchema.ParentFolderId);
+        fv.PropertySet.Add(FolderSchema.FolderClass);
+        fv.PropertySet.Add(FolderSchema.TotalCount);
+
+        List<Folder> folders = new List<Folder>();
+        FindFoldersResults allFolder = null;
+
+        #endregion
+
+        try
+        {
+            #region Find the Contact folder
+
+            #region Get All Folders under the Contacts root
+
+            #region Filter it for only contacts folder
+
+            SearchFilter.SearchFilterCollection filters = new SearchFilter.SearchFilterCollection(LogicalOperator.And);
+            SearchFilter.ContainsSubstring filterClass = new SearchFilter.ContainsSubstring(FolderSchema.FolderClass, "IPM.Note");
+            filters.Add(filterClass);
+
+            #endregion
+
+            try
+            {
+                do
+                {
+                    #region Loop through all the folders to get only contacts folder
+
+                    allFolder = exService.FindFolders(WellKnownFolderName.Contacts, filters, fv);
+
+                    for (int i = 0; i < allFolder.Folders.Count; i++)
+                    {
+                        if (allFolder.Folders[i] is ContactsFolder)
+                            folders.Add(allFolder.Folders[i] as ContactsFolder);
+                    }
+                    //any more batches?
+                    if (allFolder.NextPageOffset.HasValue)
+                    {
+                        fv.Offset = allFolder.NextPageOffset.Value;
+                    }
+
+                    #endregion
+                }
+                while (allFolder.MoreAvailable);
+            }
+            catch (Exception findFlrdEx)
+            {
+                Logging.Log(findFlrdEx, MethodInfo.GetCurrentMethod().DeclaringType.Name.ToString(), MethodInfo.GetCurrentMethod().Name.ToString());
+                Console.WriteLine("Exception happened in querying all the folders");
+            }
+            #endregion
+
+            #region Get the Weil Contacts Folder
+
+            try
+            {
+                if (folders.Count > 0)
+                {
+                    foreach (Folder contactFolder in folders)
+                    {
+                        if (contactFolder.DisplayName.ToUpper() == (string.IsNullOrEmpty(FolderName.Trim()) ? ConfigurationManager.AppSettings["ContactFolderName"].ToString().Trim().ToUpper() : FolderName.Trim().ToUpper()))
+                        {
+                            contactsFolder = contactFolder as Folder;
+                            folderFound = true;
+                            Logging.Log("\"" + FolderName.Trim() + "\" exists for the user.");
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception findFolderEx)
+            {
+                Console.WriteLine(findFolderEx.Message);
+                Console.WriteLine("Exception occurred in finding the Contacts folder.");
+            }
+
+            #endregion
+
+            #endregion
+
+            #region If Contact folder doesnot exist, Create it
+            /*
+            if (contactsFolder == null)
+            {
+                Logging.Log("\"" + FolderName.Trim() + "\" does not exist. So creating the folder for the user.");
+
+                try
+                {
+                    contactsFolder = new Folder(exService);
+                    contactsFolder.DisplayName = (string.IsNullOrEmpty(FolderName.Trim()) ? ConfigurationManager.AppSettings["ContactFolderName"].ToString().Trim() : FolderName.Trim());
+                    contactsFolder.Save(WellKnownFolderName.Inbox);
+                    folderFound = true;
+                    Thread.Sleep(3000);
+                }
+                catch (Exception folderCreationEx)
+                {
+                    Console.WriteLine(folderCreationEx.Message);
+                    Console.WriteLine("Contacts folder creation failed.");
+                }
+                finally
+                {
+                }
+            }
+            */
+            #endregion
+
+        }
+        catch (Exception ex)
+        { Console.WriteLine(ex.Message); }
+
+        return contactsFolder;
+    }
+}
